@@ -1,0 +1,25 @@
+{
+  "name": "agenthub",
+  "version": "1.0.0",
+  "description": "AI 代理管理平台 - 可视化管理多个 AI 代理",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "agent",
+    "management",
+    "ai",
+    "dashboard"
+  ],
+  "author": "yeji",
+  "license": "MIT",
+  "dependencies": {
+    "fastify": "^4.25.0",
+    "@fastify/websocket": "^8.3.1",
+    "fastify-static": "^4.2.2",
+    "better-sqlite3": "^9.3.0",
+    "fastify-cors": "^6.0.3"
+  }
+}

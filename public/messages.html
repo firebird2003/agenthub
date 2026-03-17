@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>消息中心 - AgentHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>🤖 AgentHub</h1>
+            <nav class="nav">
+                <a href="/">仪表盘</a>
+                <a href="/messages.html" class="active">消息中心</a>
+            </nav>
+        </header>
+
+        <main class="main">
+            <section class="section">
+                <div class="section-header">
+                    <h2>消息中心</h2>
+                    <span id="unread-count" class="unread-badge"></span>
+                </div>
+                <div class="message-list" id="message-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        // 获取消息列表
+        async function fetchMessages() {
+            return await apiRequest('/api/messages?limit=100');
+        }
+
+        // 渲染消息
+        function renderMessages(messages) {
+            const container = document.getElementById('message-list');
+
+            if (!messages || messages.length === 0) {
+                container.innerHTML = '<div class="empty">暂无消息</div>';
+                return;
+            }
+
+            container.innerHTML = messages.map(msg => {
+                const payload = msg.payload ? JSON.parse(msg.payload) : {};
+                const isUnread = !msg.read_at;
+
+                return `
+                    <div class="message-item ${isUnread ? 'unread' : ''}" onclick="markRead(${msg.id})">
+                        <div class="message-header">
+                            <span class="message-type">${getMessageTypeLabel(msg.type)}</span>
+                            <span class="message-priority ${msg.priority}">${msg.priority}</span>
+                        </div>
+                        <div class="message-body">
+                            ${payload.message || JSON.stringify(payload)}
+                        </div>
+                        <div class="message-time">
+                            ${formatDate(msg.created_at)}
+                            ${msg.from_agent_id ? ` | 来源: ${msg.from_agent_id}` : ''}
+                            ${msg.to_agent_id ? ` | 目标: ${msg.to_agent_id}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 更新未读数
+            const unread = messages.filter(m => !m.read_at).length;
+            document.getElementById('unread-count').textContent = unread > 0 ? `${unread} 未读` : '';
+        }
+
+        // 消息类型标签
+        function getMessageTypeLabel(type) {
+            const labels = {
+                'status_change': '状态变更',
+                'alert': '警报',
+                'report': '报告',
+                'instruction': '指令',
+                'task_completed': '任务完成',
+                'task_failed': '任务失败',
+                'agent_offline': '代理离线'
+            };
+            return labels[type] || type;
+        }
+
+        // 标记已读
+        async function markRead(id) {
+            await apiRequest(`/api/messages/${id}/read`, { method: 'PATCH' });
+            initMessages();
+        }
+
+        // 初始化
+        async function initMessages() {
+            const messages = await fetchMessages();
+            renderMessages(messages);
+        }
+
+        document.addEventListener('DOMContentLoaded', initMessages);
+    </script>
+</body>
+</html>

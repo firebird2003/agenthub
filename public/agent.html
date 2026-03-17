@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代理详情 - AgentHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>🤖 AgentHub</h1>
+            <nav class="nav">
+                <a href="/">仪表盘</a>
+                <a href="/messages.html">消息中心</a>
+            </nav>
+        </header>
+
+        <main class="main">
+            <a href="/" class="back-link">← 返回仪表盘</a>
+
+            <div class="section">
+                <div class="detail-header">
+                    <div>
+                        <h2 id="agent-name">加载中...</h2>
+                        <p id="agent-id" class="text-secondary"></p>
+                    </div>
+                    <button class="btn btn-danger" onclick="deleteCurrentAgent()">删除代理</button>
+                </div>
+
+                <div class="detail-info">
+                    <div class="detail-card">
+                        <div class="detail-label">在线状态</div>
+                        <div class="detail-value" id="agent-online">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">当前任务</div>
+                        <div class="detail-value" id="agent-task">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">健康评分</div>
+                        <div class="detail-value" id="agent-health">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">Token 消耗</div>
+                        <div class="detail-value" id="agent-tokens">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">任务完成数</div>
+                        <div class="detail-value" id="agent-tasks">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">最后活跃</div>
+                        <div class="detail-value" id="agent-last-active">-</div>
+                    </div>
+                </div>
+
+                <h3>基本信息</h3>
+                <div class="detail-info">
+                    <div class="detail-card">
+                        <div class="detail-label">角色</div>
+                        <div class="detail-value" id="agent-role">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">性格</div>
+                        <div class="detail-value" id="agent-personality">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">工作职责</div>
+                        <div class="detail-value" id="agent-duties">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">技能</div>
+                        <div class="detail-value" id="agent-skills">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">工作区</div>
+                        <div class="detail-value" id="agent-workspace">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">创建时间</div>
+                        <div class="detail-value" id="agent-created">-</div>
+                    </div>
+                </div>
+
+                <h3>状态历史</h3>
+                <div class="history-list" id="history-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        // 获取 URL 参数
+        function getAgentId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        // 获取代理详情
+        async function fetchAgentDetail(id) {
+            return await apiRequest(`/api/agents/${id}`);
+        }
+
+        // 获取代理历史
+        async function fetchAgentHistory(id) {
+            return await apiRequest(`/api/agents/${id}/history?limit=20`);
+        }
+
+        // 渲染代理详情
+        function renderAgentDetail(agent) {
+            document.getElementById('agent-name').textContent = agent.name;
+            document.getElementById('agent-id').textContent = `ID: ${agent.id}`;
+
+            // 状态
+            document.getElementById('agent-online').textContent = agent.online ? '🟢 在线' : '⚪ 离线';
+            document.getElementById('agent-task').textContent = agent.current_task || '-';
+            document.getElementById('agent-health').textContent = agent.health_score ? `${agent.health_score}/100` : '-';
+            document.getElementById('agent-tokens').textContent = agent.tokens_used ? agent.tokens_used.toLocaleString() : '0';
+            document.getElementById('agent-tasks').textContent = agent.tasks_completed || '0';
+            document.getElementById('agent-last-active').textContent = formatDate(agent.last_active);
+
+            // 基本信息
+            document.getElementById('agent-role').textContent = agent.role || '-';
+            document.getElementById('agent-personality').textContent = agent.personality || '-';
+            document.getElementById('agent-duties').textContent = agent.duties || '-';
+            document.getElementById('agent-skills').textContent = agent.skills || '-';
+            document.getElementById('agent-workspace').textContent = agent.workspace || '-';
+            document.getElementById('agent-created').textContent = formatDate(agent.created_at);
+        }
+
+        // 渲染历史
+        function renderHistory(history) {
+            const container = document.getElementById('history-list');
+
+            if (!history || history.length === 0) {
+                container.innerHTML = '<div class="empty">暂无历史记录</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(h => `
+                <div class="history-item">
+                    <span>${getStatusTypeLabel(h.status_type)}</span>
+                    <span>${formatDate(h.changed_at)}</span>
+                </div>
+            `).join('');
+        }
+
+        function getStatusTypeLabel(type) {
+            const labels = {
+                'online': '在线状态',
+                'current_task': '当前任务',
+                'health_score': '健康评分',
+                'tokens_used': 'Token消耗',
+                'tasks_completed': '任务完成数'
+            };
+            return labels[type] || type;
+        }
+
+        // 删除代理
+        function deleteCurrentAgent() {
+            const id = getAgentId();
+            if (id) {
+                deleteAgent(id);
+            }
+        }
+
+        // 初始化
+        async function init() {
+            const id = getAgentId();
+            if (!id) {
+                window.location.href = '/';
+                return;
+            }
+
+            const agent = await fetchAgentDetail(id);
+            if (agent.error) {
+                alert(agent.error);
+                window.location.href = '/';
+                return;
+            }
+
+            renderAgentDetail(agent);
+
+            const history = await fetchAgentHistory(id);
+            renderHistory(history);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
