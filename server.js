@@ -6,23 +6,22 @@
 
 const path = require('path');
 const Fastify = require('fastify');
-const cors = require('fastify-cors');
+const cors = require('@fastify/cors');
 const websocket = require('@fastify/websocket');
 const fs = require('fs');
 
 // 配置文件
 const CONFIG = require('./config');
 
-// 初始化数据库
-const { initDatabase, getDb } = require('./database/init');
-
 // 路由
 const agentRoutes = require('./routes/agents');
 const statusRoutes = require('./routes/status');
 const messageRoutes = require('./routes/messages');
 
+let fastify;
+
 async function buildServer() {
-    const fastify = Fastify({
+    fastify = Fastify({
         logger: true
     });
 
@@ -62,7 +61,7 @@ async function buildServer() {
     });
 
     // 提供静态文件
-    fastify.register(require('fastify-static'), {
+    fastify.register(require('@fastify/static'), {
         root: path.join(__dirname, 'public'),
         prefix: '/'
     });
@@ -79,15 +78,13 @@ function handleWebSocketMessage(socket, data) {
             break;
 
         case 'subscribe':
-            // 订阅特定代理的状态更新
             socket.agentId = payload?.agent_id;
             socket.send(JSON.stringify({ type: 'subscribed', agent_id: payload?.agent_id }));
             break;
 
         case 'query':
-            // 查询代理状态
-            const db = getDb();
-            const agent = db.prepare(`
+            const { prepare } = require('./database/init');
+            const agent = prepare(`
                 SELECT a.*, s.online, s.last_active, s.current_task, s.health_score
                 FROM agents a
                 LEFT JOIN agent_status s ON a.id = s.agent_id
@@ -111,10 +108,11 @@ async function start() {
     CONFIG.ensureDirs();
 
     // 初始化数据库
-    initDatabase();
+    const { initDatabase } = require('./database/init');
+    await initDatabase();
 
     // 构建服务器
-    const fastify = await buildServer();
+    fastify = await buildServer();
 
     // 获取端口
     let port = CONFIG.getPort();
@@ -128,7 +126,7 @@ async function start() {
 
     // 启动服务器
     try {
-        await fastify.listen(port, '0.0.0.0');
+        await fastify.listen({ port: port, host: '0.0.0.0' });
         console.log(`
 ============================================
   AgentHub 代理管理平台已启动
@@ -150,6 +148,8 @@ async function start() {
 // 优雅关闭
 process.on('SIGINT', async () => {
     console.log('\n正在关闭服务器...');
+    const { closeDatabase } = require('./database/init');
+    closeDatabase();
     await fastify.close();
     process.exit(0);
 });

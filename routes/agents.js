@@ -2,14 +2,13 @@
  * 代理相关 API 路由
  */
 
-const { getDb } = require('../database/init');
+const fp = require('fastify-plugin');
+const { prepare } = require('../database/init');
 
-function agentRoutes(fastify, options) {
-    const db = getDb();
-
+async function agentRoutes(fastify, options) {
     // 获取所有代理列表（含当前状态）
     fastify.get('/api/agents', async (request, reply) => {
-        const agents = db.prepare(`
+        const agents = prepare(`
             SELECT a.*, s.online, s.last_active, s.current_task,
                    s.health_score, s.tokens_used, s.tasks_completed
             FROM agents a
@@ -24,7 +23,7 @@ function agentRoutes(fastify, options) {
     fastify.get('/api/agents/:id', async (request, reply) => {
         const { id } = request.params;
 
-        const agent = db.prepare(`
+        const agent = prepare(`
             SELECT a.*, s.online, s.last_active, s.current_task,
                    s.health_score, s.tokens_used, s.tasks_completed
             FROM agents a
@@ -51,13 +50,13 @@ function agentRoutes(fastify, options) {
 
         try {
             // 插入代理基本信息
-            db.prepare(`
+            prepare(`
                 INSERT INTO agents (id, name, personality, role, duties, skills, channel, workspace)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(id, name, personality, role, duties, skills, channel, workspace);
+            `).run(id, name, personality || null, role || null, duties || null, skills || null, channel || null, workspace || null);
 
             // 初始化状态
-            db.prepare(`
+            prepare(`
                 INSERT INTO agent_status (agent_id, online, last_active)
                 VALUES (?, 0, datetime('now'))
             `).run(id);
@@ -65,11 +64,13 @@ function agentRoutes(fastify, options) {
             reply.code(201);
             return { success: true, id };
         } catch (error) {
-            if (error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+            console.error('Create agent error:', error);
+            if (error.message && error.message.includes('UNIQUE constraint failed')) {
                 reply.code(409);
                 return { error: '代理ID已存在' };
             }
-            throw error;
+            reply.code(500);
+            return { error: error.message };
         }
     });
 
@@ -78,23 +79,34 @@ function agentRoutes(fastify, options) {
         const { id } = request.params;
         const { name, personality, role, duties, skills, channel, workspace } = request.body;
 
-        const result = db.prepare(`
-            UPDATE agents
-            SET name = COALESCE(?, name),
-                personality = COALESCE(?, personality),
-                role = COALESCE(?, role),
-                duties = COALESCE(?, duties),
-                skills = COALESCE(?, skills),
-                channel = COALESCE(?, channel),
-                workspace = COALESCE(?, workspace),
-                updated_at = datetime('now')
-            WHERE id = ?
-        `).run(name, personality, role, duties, skills, channel, workspace, id);
-
-        if (result.changes === 0) {
+        // 获取当前值
+        const current = prepare('SELECT * FROM agents WHERE id = ?').get(id);
+        if (!current) {
             reply.code(404);
             return { error: '代理不存在' };
         }
+
+        prepare(`
+            UPDATE agents
+            SET name = ?,
+                personality = ?,
+                role = ?,
+                duties = ?,
+                skills = ?,
+                channel = ?,
+                workspace = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        `).run(
+            name || current.name,
+            personality || current.personality,
+            role || current.role,
+            duties || current.duties,
+            skills || current.skills,
+            channel || current.channel,
+            workspace || current.workspace,
+            id
+        );
 
         return { success: true };
     });
@@ -103,22 +115,24 @@ function agentRoutes(fastify, options) {
     fastify.delete('/api/agents/:id', async (request, reply) => {
         const { id } = request.params;
 
-        // 删除状态历史
-        db.prepare('DELETE FROM agent_status_history WHERE agent_id = ?').run(id);
-
-        // 删除状态
-        db.prepare('DELETE FROM agent_status WHERE agent_id = ?').run(id);
-
-        // 删除消息
-        db.prepare('DELETE FROM messages WHERE from_agent_id = ? OR to_agent_id = ?').run(id, id);
-
-        // 删除代理
-        const result = db.prepare('DELETE FROM agents WHERE id = ?').run(id);
-
-        if (result.changes === 0) {
+        // 检查是否存在
+        const agent = prepare('SELECT id FROM agents WHERE id = ?').get(id);
+        if (!agent) {
             reply.code(404);
             return { error: '代理不存在' };
         }
+
+        // 删除状态历史
+        prepare('DELETE FROM agent_status_history WHERE agent_id = ?').run(id);
+
+        // 删除状态
+        prepare('DELETE FROM agent_status WHERE agent_id = ?').run(id);
+
+        // 删除消息
+        prepare('DELETE FROM messages WHERE from_agent_id = ? OR to_agent_id = ?').run(id, id);
+
+        // 删除代理
+        prepare('DELETE FROM agents WHERE id = ?').run(id);
 
         return { success: true };
     });
@@ -128,7 +142,7 @@ function agentRoutes(fastify, options) {
         const { id } = request.params;
         const { limit = 50 } = request.query;
 
-        const history = db.prepare(`
+        const history = prepare(`
             SELECT * FROM agent_status_history
             WHERE agent_id = ?
             ORDER BY changed_at DESC
@@ -139,4 +153,4 @@ function agentRoutes(fastify, options) {
     });
 }
 
-module.exports = agentRoutes;
+module.exports = fp(agentRoutes);

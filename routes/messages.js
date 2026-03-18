@@ -2,11 +2,10 @@
  * 消息相关 API 路由
  */
 
-const { getDb } = require('../database/init');
+const fp = require('fastify-plugin');
+const { prepare } = require('../database/init');
 
-function messageRoutes(fastify, options) {
-    const db = getDb();
-
+async function messageRoutes(fastify, options) {
     // 获取所有消息（或指定代理的消息）
     fastify.get('/api/messages', async (request, reply) => {
         const { agent_id, type, limit = 50 } = request.query;
@@ -27,7 +26,7 @@ function messageRoutes(fastify, options) {
         query += ' ORDER BY created_at DESC LIMIT ?';
         params.push(parseInt(limit));
 
-        const messages = db.prepare(query).all(...params);
+        const messages = prepare(query).all(...params);
         return messages;
     });
 
@@ -43,7 +42,7 @@ function messageRoutes(fastify, options) {
             params.push(agent_id);
         }
 
-        const result = db.prepare(query).get(...params);
+        const result = prepare(query).get(...params);
         return { count: result.count };
     });
 
@@ -56,20 +55,20 @@ function messageRoutes(fastify, options) {
             return { error: '缺少消息类型' };
         }
 
-        const result = db.prepare(`
+        prepare(`
             INSERT INTO messages (from_agent_id, to_agent_id, type, priority, payload, requires_ack)
             VALUES (?, ?, ?, ?, ?, ?)
         `).run(from_agent_id, to_agent_id, type, priority || 'normal', JSON.stringify(payload), requires_ack ? 1 : 0);
 
         reply.code(201);
-        return { success: true, id: result.lastInsertRowid };
+        return { success: true };
     });
 
     // 标记消息为已读
     fastify.patch('/api/messages/:id/read', async (request, reply) => {
         const { id } = request.params;
 
-        const result = db.prepare(`
+        const result = prepare(`
             UPDATE messages SET read_at = datetime('now') WHERE id = ?
         `).run(id);
 
@@ -86,7 +85,7 @@ function messageRoutes(fastify, options) {
         const { id } = request.params;
         const { status } = request.body;
 
-        const result = db.prepare(`
+        const result = prepare(`
             UPDATE messages SET ack_status = ?, read_at = datetime('now') WHERE id = ?
         `).run(status, id);
 
@@ -102,7 +101,7 @@ function messageRoutes(fastify, options) {
     fastify.delete('/api/messages/:id', async (request, reply) => {
         const { id } = request.params;
 
-        const result = db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+        const result = prepare('DELETE FROM messages WHERE id = ?').run(id);
 
         if (result.changes === 0) {
             reply.code(404);
@@ -113,4 +112,4 @@ function messageRoutes(fastify, options) {
     });
 }
 
-module.exports = messageRoutes;
+module.exports = fp(messageRoutes);
