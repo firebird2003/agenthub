@@ -157,55 +157,11 @@ AgentHub 安装脚本
   uninstall         卸载
   help              显示帮助
 
-无参数时运行安装向导
+示例:
+  $0 install        # 安装并启动
+  $0 start          # 启动服务
+  $0 status         # 查看状态
 EOF
-}
-
-# 主菜单
-show_menu() {
-    echo ""
-    echo "=== AgentHub 安装向导 ==="
-    echo ""
-    echo "1. 安装并启动"
-    echo "2. 启动服务"
-    echo "3. 停止服务"
-    echo "4. 查看状态"
-    echo "5. 卸载"
-    echo "6. 显示帮助"
-    echo "q. 退出"
-    echo ""
-    read -p "请选择: " CHOICE
-
-    case "$CHOICE" in
-        1)
-            check_node
-            check_npm
-            install_deps
-            init_database
-            start_service
-            ;;
-        2)
-            start_service
-            ;;
-        3)
-            stop_service
-            ;;
-        4)
-            service_status
-            ;;
-        5)
-            uninstall
-            ;;
-        6)
-            show_help
-            ;;
-        q|Q)
-            exit 0
-            ;;
-        *)
-            print_error "无效选择"
-            ;;
-    esac
 }
 
 # 主入口
@@ -241,15 +197,9 @@ main() {
         help|--help|-h)
             show_help
             ;;
-        "")
-            check_node
-            check_npm
-            show_menu
-            ;;
         *)
-            print_error "未知命令: $1"
+            # 无参数时显示帮助
             show_help
-            exit 1
             ;;
     esac
 }

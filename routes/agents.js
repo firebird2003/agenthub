@@ -101,6 +101,70 @@ async function agentRoutes(fastify, options) {
     fastify.get('/api/agents/:id', async (request, reply) => {
         const { id } = request.params;
 
+        // 处理主代理
+        if (id === 'main') {
+            const homeDir = process.env.HOME || process.env.USERPROFILE;
+            const mainAgentDir = path.join(homeDir, '.openclaw', 'workspace');
+            const now = new Date();
+            const threshold = 5 * 60 * 1000;
+
+            const getLastActivityTime = (dirPath) => {
+                const keyFiles = ['MEMORY.md', 'IDENTITY.md', 'SOUL.md', 'sessions', 'memory'];
+                let latestTime = null;
+                try {
+                    const dirStat = fs.statSync(dirPath);
+                    latestTime = dirStat.mtime;
+                    for (const file of keyFiles) {
+                        const filePath = path.join(dirPath, file);
+                        if (fs.existsSync(filePath)) {
+                            const stat = fs.statSync(filePath);
+                            if (stat.mtime > latestTime) latestTime = stat.mtime;
+                        }
+                    }
+                    const subDirs = ['sessions', 'memory', 'skills'];
+                    for (const subDir of subDirs) {
+                        const subPath = path.join(dirPath, subDir);
+                        if (fs.existsSync(subPath) && fs.statSync(subPath).isDirectory()) {
+                            const entries = fs.readdirSync(subPath);
+                            for (const entry of entries) {
+                                const stat = fs.statSync(path.join(subPath, entry));
+                                if (stat.mtime > latestTime) latestTime = stat.mtime;
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return latestTime;
+            };
+
+            const lastTime = getLastActivityTime(mainAgentDir);
+            const isActive = lastTime ? (now - lastTime) < threshold : false;
+
+            // 读取主代理的 SOUL.md 获取名字
+            let name = '主代理';
+            const soulPath = path.join(mainAgentDir, 'SOUL.md');
+            if (fs.existsSync(soulPath)) {
+                const content = fs.readFileSync(soulPath, 'utf-8');
+                const nameMatch = content.match(/^## 名字$\s*([^\n]+)/m);
+                if (nameMatch) name = nameMatch[1].trim();
+            }
+
+            return {
+                id: 'main',
+                name: name,
+                role: 'main',
+                personality: '',
+                duties: '',
+                skills: '',
+                wanted_skills: '',
+                channel: null,
+                workspace: homeDir,
+                created_at: '',
+                is_active: isActive,
+                last_activity: lastTime ? lastTime.toISOString() : null,
+                is_main: true
+            };
+        }
+
         const agent = prepare(`
             SELECT a.*, s.online, s.last_active, s.current_task,
                    s.health_score, s.tokens_used, s.tasks_completed
