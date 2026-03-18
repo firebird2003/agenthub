@@ -41,7 +41,7 @@ async function agentRoutes(fastify, options) {
 
     // 创建新代理
     fastify.post('/api/agents', async (request, reply) => {
-        const { id, name, personality, role, duties, skills, channel, workspace, initial_tokens, max_concurrent_tasks } = request.body;
+        const { id, name, personality, role, duties, skills, wanted_skills, channel, workspace, initial_tokens, max_concurrent_tasks } = request.body;
 
         if (!id || !name) {
             reply.code(400);
@@ -51,9 +51,9 @@ async function agentRoutes(fastify, options) {
         try {
             // 插入代理基本信息
             prepare(`
-                INSERT INTO agents (id, name, personality, role, duties, skills, channel, workspace, initial_tokens, max_concurrent_tasks)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(id, name, personality || null, role || null, duties || null, skills || null, channel || null, workspace || null, initial_tokens || 10000, max_concurrent_tasks || 1);
+                INSERT INTO agents (id, name, personality, role, duties, skills, wanted_skills, channel, workspace, initial_tokens, max_concurrent_tasks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(id, name, personality || null, role || null, duties || null, skills || null, wanted_skills || null, channel || null, workspace || null, initial_tokens || 10000, max_concurrent_tasks || 1);
 
             // 初始化状态
             prepare(`
@@ -77,7 +77,7 @@ async function agentRoutes(fastify, options) {
     // 更新代理基本信息
     fastify.put('/api/agents/:id', async (request, reply) => {
         const { id } = request.params;
-        const { name, personality, role, duties, skills, channel, workspace, initial_tokens, max_concurrent_tasks } = request.body;
+        const { name, personality, role, duties, skills, wanted_skills, channel, workspace, initial_tokens, max_concurrent_tasks } = request.body;
 
         // 获取当前值
         const current = prepare('SELECT * FROM agents WHERE id = ?').get(id);
@@ -93,6 +93,7 @@ async function agentRoutes(fastify, options) {
                 role = ?,
                 duties = ?,
                 skills = ?,
+                wanted_skills = ?,
                 channel = ?,
                 workspace = ?,
                 initial_tokens = ?,
@@ -105,6 +106,7 @@ async function agentRoutes(fastify, options) {
             role || current.role,
             duties || current.duties,
             skills || current.skills,
+            wanted_skills || current.wanted_skills,
             channel || current.channel,
             workspace || current.workspace,
             initial_tokens || current.initial_tokens || 10000,

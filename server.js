@@ -42,6 +42,50 @@ async function buildServer() {
         return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
+    // 获取已安装的技能列表
+    fastify.get('/api/skills', async () => {
+        const skillsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.openclaw', 'workspace', 'skills');
+        const skills = [];
+
+        try {
+            if (fs.existsSync(skillsDir)) {
+                const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isDirectory()) {
+                        const skillPath = path.join(skillsDir, entry.name);
+                        const skillMdPath = path.join(skillPath, 'SKILL.md');
+
+                        let name = entry.name;
+                        let description = '';
+
+                        if (fs.existsSync(skillMdPath)) {
+                            const content = fs.readFileSync(skillMdPath, 'utf-8');
+                            // 解析 frontmatter
+                            const match = content.match(/^---\n([\s\S]*?)\n---/);
+                            if (match) {
+                                const fm = match[1];
+                                const nameMatch = fm.match(/name:\s*(.+)/);
+                                const descMatch = fm.match(/description:\s*(.+)/);
+                                if (nameMatch) name = nameMatch[1].trim();
+                                if (descMatch) description = descMatch[1].trim();
+                            }
+                        }
+
+                        skills.push({
+                            slug: entry.name,
+                            name,
+                            description
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('获取技能列表失败:', error);
+        }
+
+        return skills;
+    });
+
     // WebSocket 端点
     fastify.get('/ws', { websocket: true }, (socket, req) => {
         console.log('WebSocket 客户端连接');

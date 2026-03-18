@@ -103,11 +103,16 @@
 
                 <!-- 技能 -->
                 <div class="form-group">
-                    <label>技能（选择或输入）</label>
+                    <label>已安装技能（勾选已安装的技能）</label>
                     <div class="option-cards" id="skills-options">
                         <!-- 由 JS 动态生成 -->
                     </div>
-                    <input type="text" name="skills" placeholder="自定义技能，用逗号分隔">
+                </div>
+
+                <!-- 希望安装的技能 -->
+                <div class="form-group">
+                    <label>希望安装的技能（空格分隔，新建后代理会请求安装）</label>
+                    <input type="text" name="wanted_skills" placeholder="如: python, data-analysis">
                 </div>
 
                 <!-- 工作区 -->

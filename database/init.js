@@ -41,6 +41,7 @@ function initDatabaseSync() {
                     role TEXT,
                     duties TEXT,
                     skills TEXT,
+                    wanted_skills TEXT,
                     channel TEXT,
                     workspace TEXT,
                     initial_tokens INTEGER DEFAULT 10000,
@@ -62,6 +63,13 @@ function initDatabaseSync() {
                 db.run('SELECT max_concurrent_tasks FROM agents LIMIT 1');
             } catch (e) {
                 db.run('ALTER TABLE agents ADD COLUMN max_concurrent_tasks INTEGER DEFAULT 1');
+            }
+
+            // 如果 wanted_skills 列不存在，添加它
+            try {
+                db.run('SELECT wanted_skills FROM agents LIMIT 1');
+            } catch (e) {
+                db.run('ALTER TABLE agents ADD COLUMN wanted_skills TEXT');
             }
 
             db.run(`
