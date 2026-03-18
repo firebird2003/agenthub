@@ -437,34 +437,44 @@
 
         // 初始化
         async function init() {
-            console.log('初始化...');
-            const id = getAgentId();
-            console.log('代理ID:', id);
-            if (!id) {
-                window.location.href = '/';
-                return;
-            }
+            try {
+                console.log('初始化...');
+                const id = getAgentId();
+                console.log('代理ID:', id);
+                if (!id) {
+                    window.location.href = '/';
+                    return;
+                }
 
-            console.log('获取代理详情...');
-            const agent = await fetchAgentDetail(id);
-            console.log('代理数据:', agent);
-            if (agent.error) {
-                alert(agent.error);
-                window.location.href = '/';
-                return;
-            }
+                console.log('获取代理详情...');
+                const agent = await fetchAgentDetail(id);
+                console.log('代理数据:', agent);
+                if (agent.error) {
+                    alert(agent.error);
+                    window.location.href = '/';
+                    return;
+                }
 
-            console.log('渲染代理详情...');
-            renderAgentDetail(agent);
+                console.log('渲染代理详情...');
+                renderAgentDetail(agent);
 
-            if (id !== 'main') {
-                const history = await fetchAgentHistory(id);
-                renderHistory(history);
+                if (id !== 'main') {
+                    const history = await fetchAgentHistory(id);
+                    renderHistory(history);
+                }
+                console.log('初始化完成');
+            } catch (e) {
+                console.error('初始化错误:', e);
+                document.body.innerHTML = '<pre style="padding:20px;white-space:pre-wrap;">错误: ' + e.message + '\n\n' + e.stack + '</pre>';
             }
-            console.log('初始化完成');
         }
 
-        document.addEventListener('DOMContentLoaded', init);
+        // 确保 DOM 加载完成后执行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
