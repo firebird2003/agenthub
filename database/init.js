@@ -43,10 +43,26 @@ function initDatabaseSync() {
                     skills TEXT,
                     channel TEXT,
                     workspace TEXT,
+                    initial_tokens INTEGER DEFAULT 10000,
+                    max_concurrent_tasks INTEGER DEFAULT 1,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
             `);
+
+            // 如果 initial_tokens 列不存在，添加它
+            try {
+                db.run('SELECT initial_tokens FROM agents LIMIT 1');
+            } catch (e) {
+                db.run('ALTER TABLE agents ADD COLUMN initial_tokens INTEGER DEFAULT 10000');
+            }
+
+            // 如果 max_concurrent_tasks 列不存在，添加它
+            try {
+                db.run('SELECT max_concurrent_tasks FROM agents LIMIT 1');
+            } catch (e) {
+                db.run('ALTER TABLE agents ADD COLUMN max_concurrent_tasks INTEGER DEFAULT 1');
+            }
 
             db.run(`
                 CREATE TABLE IF NOT EXISTS agent_status (
