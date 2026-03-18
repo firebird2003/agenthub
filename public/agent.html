@@ -25,13 +25,20 @@
                         <h2 id="agent-name">加载中...</h2>
                         <p id="agent-id" class="text-secondary"></p>
                     </div>
-                    <button class="btn btn-danger" onclick="deleteCurrentAgent()">删除代理</button>
+                    <div>
+                        <button class="btn btn-primary" onclick="showEditModal()">编辑代理</button>
+                        <button class="btn btn-danger" onclick="deleteCurrentAgent()">删除代理</button>
+                    </div>
                 </div>
 
                 <div class="detail-info">
                     <div class="detail-card">
-                        <div class="detail-label">在线状态</div>
-                        <div class="detail-value" id="agent-online">-</div>
+                        <div class="detail-label">工作状态</div>
+                        <div class="detail-value" id="agent-status">-</div>
+                    </div>
+                    <div class="detail-card">
+                        <div class="detail-label">最后活跃</div>
+                        <div class="detail-value" id="agent-last-active">-</div>
                     </div>
                     <div class="detail-card">
                         <div class="detail-label">当前任务</div>
@@ -48,10 +55,6 @@
                     <div class="detail-card">
                         <div class="detail-label">任务完成数</div>
                         <div class="detail-value" id="agent-tasks">-</div>
-                    </div>
-                    <div class="detail-card">
-                        <div class="detail-label">最后活跃</div>
-                        <div class="detail-value" id="agent-last-active">-</div>
                     </div>
                 </div>
 
@@ -74,6 +77,10 @@
                         <div class="detail-value" id="agent-skills">-</div>
                     </div>
                     <div class="detail-card">
+                        <div class="detail-label">希望安装的技能</div>
+                        <div class="detail-value" id="agent-wanted-skills">-</div>
+                    </div>
+                    <div class="detail-card">
                         <div class="detail-label">工作区</div>
                         <div class="detail-value" id="agent-workspace">-</div>
                     </div>
@@ -91,8 +98,84 @@
         </main>
     </div>
 
+    <!-- 编辑代理弹窗 -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>编辑代理</h3>
+                <button class="close" onclick="closeEditModal()">×</button>
+            </div>
+            <form class="modal-body" onsubmit="saveAgentConfig(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>代理 ID</label>
+                        <input type="text" id="edit-id" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>代理名称</label>
+                        <input type="text" name="name" id="edit-name" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>角色</label>
+                    <select name="role" id="edit-role">
+                        <option value="dev">开发代理</option>
+                        <option value="writer">写作代理</option>
+                        <option value="tester">测试代理</option>
+                        <option value="ops">运维代理</option>
+                        <option value="hr">人事代理</option>
+                        <option value="pm">项目经理</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>性格</label>
+                    <input type="text" name="personality" id="edit-personality" placeholder="如: 稳重、细致、善于沟通">
+                </div>
+
+                <!-- 工作职责 -->
+                <div class="form-group">
+                    <label>工作职责（选择或输入）</label>
+                    <div class="option-tags" id="edit-duties-options"></div>
+                    <input type="text" name="duties" id="edit-duties" placeholder="自定义工作职责，用逗号分隔">
+                </div>
+
+                <!-- 技能 -->
+                <div class="form-group">
+                    <label>已安装技能（勾选）</label>
+                    <div class="option-cards" id="edit-skills-options"></div>
+                </div>
+
+                <!-- 希望安装的技能 -->
+                <div class="form-group">
+                    <label>希望安装的技能（空格分隔）</label>
+                    <input type="text" name="wanted_skills" id="edit-wanted-skills" placeholder="如: python data-analysis">
+                </div>
+
+                <!-- 工作区 -->
+                <div class="form-group">
+                    <label>工作区路径</label>
+                    <div class="workspace-input">
+                        <span class="workspace-prefix">~/agents/</span>
+                        <input type="text" name="workspace" id="edit-workspace">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn" onclick="closeEditModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/js/app.js"></script>
     <script>
+        let currentAgent = null;
+        let selectedDuties = [];
+        let selectedSkills = [];
+        let installedSkills = [];
+
         // 获取 URL 参数
         function getAgentId() {
             const params = new URLSearchParams(window.location.search);
@@ -111,22 +194,31 @@
 
         // 渲染代理详情
         function renderAgentDetail(agent) {
+            currentAgent = agent;
             document.getElementById('agent-name').textContent = agent.name;
             document.getElementById('agent-id').textContent = `ID: ${agent.id}`;
 
-            // 状态
-            document.getElementById('agent-online').textContent = agent.online ? '🟢 在线' : '⚪ 离线';
+            // 状态 - 使用 is_active 字段
+            const isActive = agent.is_active;
+            const statusEl = document.getElementById('agent-status');
+            if (isActive) {
+                statusEl.innerHTML = '<span style="color: green;">🟢 正常</span>';
+            } else {
+                statusEl.innerHTML = '<span style="color: gray;">⚪ 需要介入</span>';
+            }
+
+            document.getElementById('agent-last-active').textContent = formatDate(agent.last_activity || agent.last_active);
             document.getElementById('agent-task').textContent = agent.current_task || '-';
             document.getElementById('agent-health').textContent = agent.health_score ? `${agent.health_score}/100` : '-';
             document.getElementById('agent-tokens').textContent = agent.tokens_used ? agent.tokens_used.toLocaleString() : '0';
             document.getElementById('agent-tasks').textContent = agent.tasks_completed || '0';
-            document.getElementById('agent-last-active').textContent = formatDate(agent.last_active);
 
             // 基本信息
             document.getElementById('agent-role').textContent = agent.role || '-';
             document.getElementById('agent-personality').textContent = agent.personality || '-';
             document.getElementById('agent-duties').textContent = agent.duties || '-';
             document.getElementById('agent-skills').textContent = agent.skills || '-';
+            document.getElementById('agent-wanted-skills').textContent = agent.wanted_skills || '-';
             document.getElementById('agent-workspace').textContent = agent.workspace || '-';
             document.getElementById('agent-created').textContent = formatDate(agent.created_at);
         }
@@ -159,9 +251,185 @@
             return labels[type] || type;
         }
 
+        // 编辑弹窗
+        async function showEditModal() {
+            if (!currentAgent) return;
+
+            document.getElementById('edit-modal').classList.add('show');
+
+            // 获取已安装的技能
+            installedSkills = await fetchInstalledSkills();
+
+            // 填充表单
+            document.getElementById('edit-id').value = currentAgent.id;
+            document.getElementById('edit-name').value = currentAgent.name || '';
+            document.getElementById('edit-role').value = currentAgent.role || 'dev';
+            document.getElementById('edit-personality').value = currentAgent.personality || '';
+            document.getElementById('edit-duties').value = currentAgent.duties || '';
+            document.getElementById('edit-wanted-skills').value = currentAgent.wanted_skills || '';
+            document.getElementById('edit-workspace').value = currentAgent.workspace || '';
+
+            // 渲染工作职责选项
+            renderDutiesForEdit();
+
+            // 渲染技能选项
+            renderSkillsForEdit();
+
+            // 初始化选中的技能
+            const currentSkills = (currentAgent.skills || '').split(',').map(s => s.trim()).filter(s => s);
+            selectedSkills = currentSkills;
+            updateSkillsSelection();
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('show');
+        }
+
+        // 渲染编辑页面的工作职责选项
+        function renderDutiesForEdit() {
+            const preset = ROLE_PRESETS[document.getElementById('edit-role').value] || ROLE_PRESETS.custom;
+            const container = document.getElementById('edit-duties-options');
+            selectedDuties = [];
+
+            if (!preset.duties || preset.duties.length === 0) {
+                container.innerHTML = '<span class="option-hint">请在下方输入自定义工作职责</span>';
+                return;
+            }
+
+            // 获取当前已选择的工作职责
+            const currentDuties = (currentAgent.duties || '').split(',').map(d => d.trim()).filter(d => d);
+
+            container.innerHTML = preset.duties.map(duty => {
+                const isChecked = currentDuties.includes(duty) ? 'checked' : '';
+                if (isChecked) selectedDuties.push(duty);
+                return `
+                <label class="option-tag">
+                    <input type="checkbox" value="${duty}" ${isChecked} onchange="toggleEditDuty('${duty}', this.checked)">
+                    <span>${duty}</span>
+                </label>
+            `}).join('');
+        }
+
+        // 渲染编辑页面的技能选项
+        function renderSkillsForEdit() {
+            const container = document.getElementById('edit-skills-options');
+
+            if (!installedSkills || installedSkills.length === 0) {
+                container.innerHTML = '<span class="option-hint">未找到已安装的技能</span>';
+                return;
+            }
+
+            // 获取当前已选择的技能
+            const currentSkills = (currentAgent.skills || '').split(',').map(s => s.trim()).filter(s => s);
+
+            container.innerHTML = installedSkills.map(skill => {
+                const isSelected = currentSkills.includes(skill.slug);
+                return `
+                <div class="option-card ${isSelected ? 'selected' : ''}"
+                     onclick="toggleEditSkill('${skill.slug}', this)">
+                    <div class="option-card-name">${skill.name}</div>
+                    <div class="option-card-desc">${skill.description || skill.slug}</div>
+                </div>
+            `}).join('');
+        }
+
+        function toggleEditDuty(duty, checked) {
+            if (checked) {
+                selectedDuties.push(duty);
+            } else {
+                selectedDuties = selectedDuties.filter(d => d !== duty);
+            }
+            updateEditDutiesInput();
+        }
+
+        function toggleEditSkill(skillSlug, element) {
+            element.classList.toggle('selected');
+
+            if (selectedSkills.includes(skillSlug)) {
+                selectedSkills = selectedSkills.filter(s => s !== skillSlug);
+            } else {
+                selectedSkills.push(skillSlug);
+            }
+        }
+
+        function updateEditDutiesInput() {
+            const input = document.getElementById('edit-duties');
+            const customDuties = input.value.split(',').map(s => s.trim()).filter(s => s && !Object.values(ROLE_PRESETS).flatMap(p => p.duties).includes(s));
+            const allDuties = [...selectedDuties, ...customDuties].filter((v, i, a) => a.indexOf(v) === i);
+            if (allDuties.length > 0) {
+                input.value = allDuties.join(', ');
+            }
+        }
+
+        function updateSkillsSelection() {
+            const cards = document.querySelectorAll('#edit-skills-options .option-card');
+            cards.forEach(card => {
+                const skillName = card.querySelector('.option-card-name').textContent;
+                const skill = installedSkills.find(s => s.name === skillName);
+                if (skill && selectedSkills.includes(skill.slug)) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+        }
+
+        // 保存代理配置
+        async function saveAgentConfig(event) {
+            event.preventDefault();
+
+            const id = getAgentId();
+            if (!id || id === 'main') {
+                alert('主代理不支持编辑');
+                return;
+            }
+
+            const form = event.target;
+            const formData = new FormData(form);
+
+            // 更新选中的技能
+            const skillsInput = document.getElementById('edit-skills-options').parentNode.querySelector('input[name="skills"]');
+            if (!skillsInput) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'skills';
+                form.appendChild(input);
+            }
+            form.querySelector('input[name="skills"]').value = selectedSkills.join(', ');
+
+            const data = {
+                name: formData.get('name'),
+                role: formData.get('role'),
+                personality: formData.get('personality'),
+                duties: formData.get('duties'),
+                skills: formData.get('skills'),
+                wanted_skills: formData.get('wanted_skills'),
+                workspace: formData.get('workspace')
+            };
+
+            const result = await apiRequest(`/api/agents/${id}/config`, {
+                method: 'PATCH',
+                body: JSON.stringify(data)
+            });
+
+            if (result.success) {
+                closeEditModal();
+                // 重新加载详情
+                const agent = await fetchAgentDetail(id);
+                renderAgentDetail(agent);
+                alert('保存成功');
+            } else {
+                alert(result.error || '保存失败');
+            }
+        }
+
         // 删除代理
         function deleteCurrentAgent() {
             const id = getAgentId();
+            if (id === 'main') {
+                alert('主代理不能删除');
+                return;
+            }
             if (id) {
                 deleteAgent(id);
             }
@@ -184,8 +452,10 @@
 
             renderAgentDetail(agent);
 
-            const history = await fetchAgentHistory(id);
-            renderHistory(history);
+            if (id !== 'main') {
+                const history = await fetchAgentHistory(id);
+                renderHistory(history);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', init);

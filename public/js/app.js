@@ -86,17 +86,27 @@ function renderAgents(agents) {
         return;
     }
 
-    container.innerHTML = agents.map(agent => `
-        <div class="agent-card" onclick="window.location.href='/agent.html?id=${agent.id}'">
+    container.innerHTML = agents.map(agent => {
+        // 使用 is_active 字段判断状态
+        const isActive = agent.is_active;
+        const statusClass = isActive ? 'online' : '';
+        const statusText = isActive ? '正常' : '需要介入';
+
+        // 特殊处理主代理
+        const agentId = agent.is_main ? 'main' : agent.id;
+        const roleText = agent.is_main ? '主代理' : (agent.role || '-');
+
+        return `
+        <div class="agent-card" onclick="window.location.href='/agent.html?id=${agentId}'">
             <div class="agent-card-header">
                 <div class="agent-name">${agent.name}</div>
-                <div class="agent-status ${agent.online ? 'online' : ''}">
-                    <span class="status-dot ${agent.online ? 'online' : ''}"></span>
-                    ${agent.online ? '在线' : '离线'}
+                <div class="agent-status ${statusClass}">
+                    <span class="status-dot ${statusClass}"></span>
+                    ${statusText}
                 </div>
             </div>
             <div class="agent-info">
-                ID: ${agent.id} | 角色: ${agent.role || '-'}
+                ID: ${agentId} | 角色: ${roleText}
             </div>
             ${agent.current_task ? `
                 <div class="agent-task">
@@ -104,7 +114,7 @@ function renderAgents(agents) {
                 </div>
             ` : ''}
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // 更新统计
@@ -113,12 +123,12 @@ async function updateStats() {
     const unreadCount = await fetchUnreadCount();
 
     const total = agents.length || 0;
-    const online = agents.filter(a => a.online).length;
-    const offline = total - online;
+    const active = agents.filter(a => a.is_active).length;
+    const inactive = total - active;
 
     document.getElementById('total-agents').textContent = total;
-    document.getElementById('online-agents').textContent = online;
-    document.getElementById('offline-agents').textContent = offline;
+    document.getElementById('online-agents').textContent = active;
+    document.getElementById('offline-agents').textContent = inactive;
     document.getElementById('unread-messages').textContent = unreadCount;
 }
 

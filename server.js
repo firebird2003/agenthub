@@ -86,6 +86,55 @@ async function buildServer() {
         return skills;
     });
 
+    // 获取代理活动状态（检查文件更新时间）
+    fastify.get('/api/agents/activity', async () => {
+        const agentsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.openclaw', 'workspace', 'agents');
+        const mainAgentDir = path.join(process.env.HOME || process.env.USERPROFILE, '.openclaw', 'workspace');
+        const activity = {};
+        const now = new Date();
+        const threshold = 5 * 60 * 1000; // 5分钟
+
+        // 检查子代理目录
+        try {
+            if (fs.existsSync(agentsDir)) {
+                const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isDirectory()) {
+                        const agentPath = path.join(agentsDir, entry.name);
+                        const lastActivity = getLastActivityTime(agentPath);
+                        if (lastActivity) {
+                            const diff = now - lastActivity;
+                            activity[entry.name] = {
+                                last_active: lastActivity.toISOString(),
+                                is_active: diff < threshold,
+                                diff_minutes: Math.floor(diff / 60000)
+                            };
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('检查代理目录失败:', error);
+        }
+
+        // 检查主代理
+        try {
+            const lastActivity = getLastActivityTime(mainAgentDir);
+            if (lastActivity) {
+                const diff = now - lastActivity;
+                activity['main'] = {
+                    last_active: lastActivity.toISOString(),
+                    is_active: diff < threshold,
+                    diff_minutes: Math.floor(diff / 60000)
+                };
+            }
+        } catch (error) {
+            console.error('检查主代理目录失败:', error);
+        }
+
+        return activity;
+    });
+
     // WebSocket 端点
     fastify.get('/ws', { websocket: true }, (socket, req) => {
         console.log('WebSocket 客户端连接');
@@ -111,6 +160,49 @@ async function buildServer() {
     });
 
     return fastify;
+}
+
+// 获取目录最后活动时间（检查关键文件）
+function getLastActivityTime(dirPath) {
+    const keyFiles = ['MEMORY.md', 'IDENTITY.md', 'SOUL.md', 'sessions', 'memory'];
+    let latestTime = null;
+
+    try {
+        // 检查目录本身
+        const dirStat = fs.statSync(dirPath);
+        latestTime = dirStat.mtime;
+
+        // 检查关键文件
+        for (const file of keyFiles) {
+            const filePath = path.join(dirPath, file);
+            if (fs.existsSync(filePath)) {
+                const stat = fs.statSync(filePath);
+                if (stat.mtime > latestTime) {
+                    latestTime = stat.mtime;
+                }
+            }
+        }
+
+        // 检查子目录（如 sessions/）
+        const subDirs = ['sessions', 'memory', 'skills'];
+        for (const subDir of subDirs) {
+            const subPath = path.join(dirPath, subDir);
+            if (fs.existsSync(subPath) && fs.statSync(subPath).isDirectory()) {
+                const entries = fs.readdirSync(subPath);
+                for (const entry of entries) {
+                    const entryPath = path.join(subPath, entry);
+                    const stat = fs.statSync(entryPath);
+                    if (stat.mtime > latestTime) {
+                        latestTime = stat.mtime;
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        // 忽略错误
+    }
+
+    return latestTime;
 }
 
 function handleWebSocketMessage(socket, data) {
